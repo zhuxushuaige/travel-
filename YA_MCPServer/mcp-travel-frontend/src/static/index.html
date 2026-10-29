@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>智能旅行规划助手</title>
+  <script src="https://webapi.amap.com/maps?v=1.4.15&key={{AMAP_WEB_KEY}}"></script>
+  <style>
+    :root {
+      --primary: #3498db;
+      --success: #2ecc71;
+      --warning: #f39c12;
+      --danger: #e74c3c;
+      --light: #ecf0f1;
+      --dark: #2c3e50;
+      --train: #9b59b6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      background: #f8f9fa;
+      color: #333;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+      padding: 20px 0;
+      border-bottom: 2px solid var(--primary);
+    }
+    h1 { color: var(--dark); margin-bottom: 10px; }
+    h2 { color: var(--dark); margin-bottom: 15px; font-size: 20px; }
+    h3 { color: var(--dark); margin: 15px 0 10px; font-size: 18px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: var(--dark); }
+    input, select, button {
+      width: 100%; padding: 10px; border: 1px solid #ccc;
+      border-radius: 6px; font-size: 16px;
+    }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn-group { display: flex; gap: 10px; margin: 15px 0; }
+    .btn-group button {
+      flex: 1; background: var(--primary); color: white;
+      border: none; cursor: pointer; transition: 0.3s;
+    }
+    .btn-group button:hover { background: #2980b9; }
+    .btn-train { background: var(--train); }
+    .btn-train:hover { background: #8e44ad; }
+    .result-container {
+      background: white; border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      padding: 20px; margin-top: 20px; display: none;
+    }
+    .result-header {
+      border-bottom: 1px solid #eee;
+      padding-bottom: 15px; margin-bottom: 20px;
+    }
+    .plan-summary {
+      display: flex; flex-wrap: wrap; gap: 15px; margin-top: 10px;
+    }
+    .summary-item {
+      background: var(--light); padding: 8px 12px;
+      border-radius: 6px; font-size: 14px;
+    }
+    .day-card {
+      background: #f9f9f9; border-left: 4px solid var(--primary);
+      padding: 15px; margin-bottom: 20px; border-radius: 0 8px 8px 0;
+    }
+    .day-title {
+      font-size: 18px; font-weight: bold;
+      margin-bottom: 10px; color: var(--dark);
+    }
+    .attractions, .routes { margin-top: 10px; }
+    .attractions h4, .routes h4 { margin-bottom: 8px; color: var(--primary); }
+    .attraction-item, .route-item {
+      background: white; padding: 10px; margin: 5px 0;
+      border-radius: 6px; border: 1px solid #eee;
+    }
+    .transport { color: var(--warning); font-weight: bold; }
+    .note {
+      background: #fff8e1; padding: 12px; border-radius: 6px;
+      margin-top: 20px; font-style: italic; color: #5d4037;
+    }
+    .loading {
+      text-align: center; color: var(--primary);
+      font-style: italic; padding: 20px;
+    }
+    
+    /* 火车方案样式 */
+    .train-section {
+      margin-top: 20px; padding: 15px;
+      background: #f9f7fc; border-radius: 8px;
+      border-left: 4px solid var(--train);
+    }
+    .train-header {
+      display: flex; justify-content: space-between;
+      align-items: center; margin-bottom: 10px;
+    }
+    .train-plan-card {
+      background: white; border: 1px solid #e0e0e0;
+      border-radius: 8px; padding: 12px; margin-bottom: 10px;
+    }
+    .train-plan-header {
+      display: flex; justify-content: space-between;
+      align-items: center; margin-bottom: 8px;
+      padding-bottom: 8px; border-bottom: 1px dashed #ddd;
+    }
+    .train-plan-summary { font-size: 13px; color: #666; }
+    .train-plan-summary strong { color: var(--dark); }
+    .train-segment {
+      background: #f8f9fa; padding: 8px 12px;
+      border-radius: 6px; margin: 6px 0;
+      border-left: 3px solid var(--train);
+    }
+    .train-segment-header {
+      display: flex; justify-content: space-between;
+      font-weight: bold; color: var(--train);
+      font-size: 14px; margin-bottom: 4px;
+    }
+    .train-segment-detail {
+      font-size: 13px; color: #555;
+    }
+    .train-segment-detail span { margin-right: 12px; }
+    .train-price { color: var(--danger); font-weight: bold; }
+    .train-duration { color: var(--primary); }
+    .train-toggle {
+      background: none; border: none; color: var(--train);
+      cursor: pointer; font-size: 14px; padding: 0;
+    }
+    .train-toggle:hover { text-decoration: underline; }
+    
+    /* 地图样式 */
+    #map-container {
+      margin-top: 30px; border-top: 1px dashed #ccc; padding-top: 20px;
+    }
+    #map {
+      width: 100%; height: 500px; border-radius: 8px;
+      border: 1px solid #ddd; margin-top: 10px; background: #e8f4f8;
+    }
+    .map-status {
+      font-size: 12px; color: #999; text-align: center; margin-top: 5px;
+    }
+    .error-msg { color: var(--danger); text-align: center; padding: 20px; }
+    .route-warning { color: var(--warning); font-size: 13px; margin-top: 4px; }
+    .section-divider { margin: 30px 0; border: none; border-top: 1px dashed #ccc; }
+    .optional-label { font-size: 12px; color: #999; font-weight: normal; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🌍 智能旅行规划助手</h1>
+      <p>输入城市、天数和兴趣，一键生成行程 + 高德真实地图</p>
+    </header>
+
+    <!-- 旅行规划表单 -->
+    <div class="form-row">
+      <div class="form-group">
+        <label for="dep-city">出发城市 <span class="optional-label">（可选）</span></label>
+        <input type="text" id="dep-city" placeholder="例如：上海" />
+      </div>
+      <div class="form-group">
+        <label for="city">目的地城市</label>
+        <input type="text" id="city" value="杭州" placeholder="例如：杭州、北京、成都" />
+      </div>
+    </div>
+    
+    <div class="form-row">
+      <div class="form-group">
+        <label for="days">旅行天数 (1-7)</label>
+        <input type="number" id="days" min="1" max="7" value="3" />
+      </div>
+      <div class="form-group">
+        <label for="interests">兴趣标签</label>
+        <input type="text" id="interests" value="风景" placeholder="历史，自然，美食" />
+      </div>
+    </div>
+
+    <div class="btn-group">
+      <button onclick="createPlan()">🗓️ 生成旅行计划</button>
+      <button onclick="getWeatherOnly()">🌤️ 仅获取天气</button>
+    </div>
+
+    <div id="result" class="result-container"></div>
+
+    <hr class="section-divider" />
+
+    <!-- 独立火车查询（备用） -->
+    <div style="text-align:center;margin:20px 0;">
+      <button class="btn-train" onclick="toggleTrainForm()" style="width:auto;padding:8px 20px;">
+        🔍 单独查询火车方案
+      </button>
+    </div>
+    
+    <div id="train-form-section" style="display:none;">
+      <div class="train-form" style="background:#f9f7fc;padding:15px;border-radius:8px;margin-bottom:15px;">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="train-dep">出发城市</label>
+            <input type="text" id="train-dep" placeholder="例如：上海" />
+          </div>
+          <div class="form-group">
+            <label for="train-arr">到达城市</label>
+            <input type="text" id="train-arr" placeholder="例如：杭州" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="train-date">出行日期</label>
+            <input type="date" id="train-date" />
+          </div>
+          <div class="form-group">
+            <label for="train-time">出发时间（可选）</label>
+            <input type="time" id="train-time" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="train-strategy">优先策略</label>
+          <select id="train-strategy">
+            <option value="0">⏱️ 时间最短</option>
+            <option value="1">💰 花费最少</option>
+          </select>
+        </div>
+        <button class="btn-train" onclick="queryTrainPlan()">🔍 查询火车方案</button>
+      </div>
+      <div id="train-result" class="train-result"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'http://127.0.0.1:8081';
+    let mapInstance = null;
+
+    // ========== 工具函数 ==========
+    function getWeatherEmoji(condition) {
+      if (!condition) return '🌤️';
+      if (condition.includes('雨')) return '🌧️';
+      if (condition.includes('雪')) return '❄️';
+      if (condition.includes('多云')) return '⛅';
+      if (condition.includes('阴')) return '☁️';
+      if (condition.includes('晴')) return '☀️';
+      return '🌤️';
+    }
+
+    function parseLoc(str) {
+      if (!str || typeof str !== 'string') return null;
+      const parts = str.split(',').map(s => s.trim());
+      if (parts.length < 2) return null;
+      const lng = parseFloat(parts[0]), lat = parseFloat(parts[1]);
+      return (isNaN(lng) || isNaN(lat)) ? null : [lng, lat];
+    }
+
+    function formatTime(timeStr) {
+      if (!timeStr || timeStr === 'N/A') return '';
+      if (typeof timeStr === 'string' && timeStr.length === 4 && /^\d{4}$/.test(timeStr)) {
+        return `${timeStr.slice(0, 2)}:${timeStr.slice(2)}`;
+      }
+      return timeStr;
+    }
+
+    async function callAPI(endpoint, data) {
+      try {
+        const response = await fetch(`${API_BASE}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+      } catch (err) {
+        return { error: `请求失败：${err.message}` };
+      }
+    }
+
+    // ========== 格式化距离显示 ==========
+    function formatRouteInfo(route) {
+      const distance = route.distance_km;
+      const duration = route.duration_min;
+      if (!distance) {
+        return { distance: '同地', duration: '-', warning: '起点与终点相同，无需交通' };
+      }
+      if (distance < 0.5) {
+        return {
+          distance: `${Math.round(distance * 1000)} 米`,
+          duration: duration ? `${duration} 分钟` : '步行约 5 分钟',
+          warning: '距离很近，建议步行'
+        };
+      }
+      return {
+        distance: `${distance} km`,
+        duration: duration ? `${duration} 分钟` : '未知',
+        warning: null
+      };
+    }
+
+    // ========== 渲染火车方案（复用函数） ==========
+    function renderTrainPlan(data, containerId, isCollapsed = false) {
+      const resultEl = document.getElementById(containerId);
+      if (!resultEl) return;
+      
+      if (data.error) {
+        resultEl.innerHTML = `<div class="error-msg">❌ ${data.error}</div>`;
+        return;
+      }
+
+      if (!data.train_plans || data.train_plans.length === 0) {
+        resultEl.innerHTML = '<p style="text-align:center;color:#666;font-size:14px;">暂无火车方案</p>';
+        return;
+      }
+
+      let html = '';
+      
+      if (isCollapsed) {
+        // 折叠模式：只显示第一条方案摘要
+        const plan = data.train_plans[0];
+        const firstSeg = plan.train_segments[0];
+        html = `
+          <div class="train-plan-card" style="margin:0;">
+            <div class="train-plan-header">
+              <div>
+                <strong>🚄 ${data.departure_city} → ${data.arrival_city}</strong>
+                <span class="train-plan-summary">
+                  | ⏱️ <strong>${plan.total_duration_min} 分钟</strong>
+                  | 💰 <strong class="train-price">¥${plan.total_cost_yuan}</strong>
+                </span>
+              </div>
+              <button class="train-toggle" onclick="expandTrainPlan('${containerId}', ${JSON.stringify(data).replace(/'/g, "\\'")})">
+                查看详情 ▼
+              </button>
+            </div>
+            <div class="train-segment">
+              <div class="train-segment-header">
+                <span>${firstSeg.train_no} ${firstSeg.train_type}</span>
+                <span class="train-price">¥${firstSeg.price_yuan}</span>
+              </div>
+              <div class="train-segment-detail">
+                <span>🚉 ${firstSeg.departure_station}</span>
+                <span>→</span>
+                <span>🚉 ${firstSeg.arrival_station}</span>
+              </div>
+              <div class="train-segment-detail" style="margin-top:3px;">
+                <span class="train-duration">🕐 ${formatTime(firstSeg.departure_time)} - ${formatTime(firstSeg.arrival_time)}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        // 完整模式
+        html = `
+          <div style="margin-bottom:10px;">
+            <strong>🚄 ${data.departure_city} → ${data.arrival_city}</strong><br/>
+            <small style="color:#666;">📅 ${data.date} | ${data.strategy}</small>
+          </div>
+        `;
+        data.train_plans.forEach((plan, idx) => {
+          html += `
+            <div class="train-plan-card">
+              <div class="train-plan-header">
+                <div>
+                  <strong>方案 ${idx + 1}</strong>
+                  <span class="train-plan-summary">
+                    | ⏱️ <strong>${plan.total_duration_min} 分钟</strong>
+                    | 💰 <strong class="train-price">¥${plan.total_cost_yuan}</strong>
+                  </span>
+                </div>
+              </div>
+              ${plan.train_segments.map(seg => `
+                <div class="train-segment">
+                  <div class="train-segment-header">
+                    <span>${seg.train_no} ${seg.train_type}</span>
+                    <span class="train-price">¥${seg.price_yuan}</span>
+                  </div>
+                  <div class="train-segment-detail">
+                    <span>🚉 ${seg.departure_station}</span>
+                    <span>→</span>
+                    <span>🚉 ${seg.arrival_station}</span>
+                  </div>
+                  <div class="train-segment-detail" style="margin-top:3px;">
+                    <span class="train-duration">🕐 ${formatTime(seg.departure_time)} - ${formatTime(seg.arrival_time)}</span>
+                    <span>⏱️ ${seg.duration_min} 分钟</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        });
+      }
+      resultEl.innerHTML = html;
+    }
+
+    // 展开折叠的火车详情
+    function expandTrainPlan(containerId, dataStr) {
+      try {
+        const data = JSON.parse(dataStr.replace(/\\'/g, "'"));
+        renderTrainPlan(data, containerId, false);
+      } catch (e) {
+        console.error('展开详情失败:', e);
+      }
+    }
+
+    // ========== 渲染旅行计划 ==========
+    function renderPlan(data, trainData = null) {
+      const resultEl = document.getElementById('result');
+      if (data.error) {
+        resultEl.innerHTML = `<div class="error-msg">❌ ${data.error}</div>`;
+        resultEl.style.display = 'block';
+        removeMapContainer();
+        return;
+      }
+
+      let html = `
+        <div class="result-header">
+          <h2>✈️ ${data.city || '未知'} ${data.total_days || '?'}日计划</h2>
+          <div class="plan-summary">
+            <div class="summary-item">📅 ${data.itinerary?.[0]?.date || '起始日'}</div>
+            <div class="summary-item">🌤️ ${data.weather_overview || '天气信息'}</div>
+            <div class="summary-item">🏨 ${data.hotel?.name || '住宿信息'}</div>
+          </div>
+        </div>`;
+
+      if (!data.itinerary?.length) {
+        html += '<p style="text-align:center;color:#666;">暂无行程数据</p>';
+      } else {
+        data.itinerary.forEach(day => {
+          const emoji = getWeatherEmoji(day.weather);
+          html += `
+            <div class="day-card">
+              <div class="day-title">第 ${day.day || '?'} 天 · ${day.date || ''} ${emoji} ${day.weather || ''}</div>
+              <div class="attractions">
+                <h4>📍 推荐景点</h4>
+                ${(day.attractions || []).map(a => {
+                  const name = typeof a === 'string' ? a : (a.name || '未知景点');
+                  return `<div class="attraction-item">${name}</div>`;
+                }).join('')}
+              </div>
+              <div class="routes">
+                <h4>🚗 交通建议</h4>
+                ${(day.routes || []).map(r => {
+                  const routeInfo = formatRouteInfo(r);
+                  return `
+                    <div class="route-item">
+                      <strong>${r.from || '?'}</strong> → <strong>${r.to || '?'}</strong><br/>
+                      <span class="transport">${r.transport || '建议出行方式'}</span><br/>
+                      距离：${routeInfo.distance} | 预计：${routeInfo.duration}
+                      ${routeInfo.warning ? `<div class="route-warning">💡 ${routeInfo.warning}</div>` : ''}
+                    </div>`;
+                }).join('')}
+              </div>
+            </div>`;
+        });
+      }
+      if (data.note) html += `<div class="note">📌 ${data.note}</div>`;
+      
+      //  如果有火车方案，插入显示
+      if (trainData && !trainData.error && trainData.train_plans?.length > 0) {
+        html += `
+          <div class="train-section">
+            <div class="train-header">
+              <h3 style="margin:0;">🚄 推荐火车方案</h3>
+            </div>
+            <div id="plan-train-result"></div>
+          </div>`;
+      }
+      
+      html += `
+        <div id="map-container">
+          <h3>🗺️ 行程地图</h3>
+          <div id="map"></div>
+          <p class="map-status" id="map-status"></p>
+        </div>`;
+      
+      resultEl.innerHTML = html;
+      resultEl.style.display = 'block';
+      
+      // 渲染火车方案（折叠模式）
+      if (trainData && !trainData.error && trainData.train_plans?.length > 0) {
+        renderTrainPlan(trainData, 'plan-train-result', true);
+      }
+      
+      setTimeout(() => initMapWithRoutes(data), 500);
+    }
+
+    // ========== 高德地图初始化 ==========
+    function initMapWithRoutes(data) {
+      const mapEl = document.getElementById('map');
+      const statusEl = document.getElementById('map-status');
+      if (!mapEl || typeof AMap === 'undefined') {
+        if (statusEl) statusEl.textContent = '地图服务不可用';
+        return;
+      }
+      try {
+        if (mapInstance) { mapInstance.destroy(); mapInstance = null; }
+        const hotelLoc = parseLoc(data.hotel?.location);
+        const defaultCenter = [116.407526, 39.904030];
+        const mapCenter = hotelLoc || defaultCenter;
+        mapInstance = new AMap.Map('map', {
+          zoom: hotelLoc ? 13 : 10,
+          center: mapCenter,
+          resizeEnable: true
+        });
+        mapInstance.on('complete', () => { if (statusEl) statusEl.textContent = '✅ 地图加载成功'; });
+        mapInstance.on('error', () => { if (statusEl) statusEl.textContent = '❌ 地图加载失败'; });
+        const markers = [], allPoints = [];
+        if (data.hotel?.name && hotelLoc) {
+          allPoints.push(hotelLoc);
+          markers.push(new AMap.Marker({
+            position: hotelLoc, title: `🏨 ${data.hotel.name}`,
+            icon: 'https://webapi.amap.com/theme/v1.3/markers/n/home.png',
+            offset: new AMap.Pixel(-13, -30)
+          }));
+        }
+        (data.itinerary || []).forEach(day => {
+          (day.attractions || []).forEach((attr, idx) => {
+            let name, location;
+            if (typeof attr === 'string') { name = attr; location = null; }
+            else { name = attr.name || `景点 ${idx + 1}`; location = parseLoc(attr.location); }
+            if (location) {
+              allPoints.push(location);
+              markers.push(new AMap.Marker({
+                position: location, title: `📍 ${name}`,
+                icon: 'https://webapi.amap.com/theme/v1.3/markers/n/mark_b.png',
+                offset: new AMap.Pixel(-13, -30)
+              }));
+            }
+          });
+        });
+        if (markers.length > 0) {
+          mapInstance.add(markers);
+          if (allPoints.length >= 1) mapInstance.setFitView();
+        }
+        mapInstance.addControl(new AMap.Scale());
+        mapInstance.addControl(new AMap.ToolBar());
+      } catch (e) {
+        if (statusEl) statusEl.textContent = '地图初始化失败';
+      }
+    }
+
+    function removeMapContainer() {
+      const el = document.getElementById('map-container');
+      if (el) el.remove();
+      if (mapInstance) { mapInstance.destroy(); mapInstance = null; }
+    }
+
+    // ========== 渲染天气 ==========
+    function renderWeather(data) {
+      const resultEl = document.getElementById('result');
+      if (data.error) {
+        resultEl.innerHTML = `<div class="error-msg">❌ ${data.error}</div>`;
+        resultEl.style.display = 'block';
+        removeMapContainer();
+        return;
+      }
+      let html = `<div class="result-header"><h2>🌤️ ${data.city || '未知'} 天气预报</h2></div>`;
+      if (!data.forecast?.length) {
+        html += '<p style="text-align:center;color:#666;">暂无天气数据</p>';
+      } else {
+        data.forecast.forEach(day => {
+          const emoji = getWeatherEmoji(day.weather);
+          const temps = (day.temperature || '').split('~').map(t => t.replace(/°C?/g, '').trim());
+          const [low, high] = temps;
+          let tempDisplay = day.temperature || 'N/A';
+          if (low && high && !isNaN(parseInt(low)) && !isNaN(parseInt(high))) {
+            const range = parseInt(high) - parseInt(low);
+            const width = Math.max(30, Math.min(100, range * 10));
+            tempDisplay = `
+              <div style="display:flex;align-items:center;margin-top:6px;gap:8px;">
+                <span style="font-size:14px;color:#3498db">${low}°</span>
+                <div style="flex:1;height:8px;background:#ecf0f1;border-radius:4px;position:relative;overflow:hidden;">
+                  <div style="height:100%;width:${width}%;background:linear-gradient(to right,#3498db,#e74c3c);border-radius:4px;"></div>
+                </div>
+                <span style="font-size:14px;color:#e74c3c">${high}°</span>
+              </div>`;
+          }
+          html += `
+            <div class="day-card">
+              <div class="day-title">${day.date || '?'} · ${emoji} ${day.weather || '未知'}</div>
+              <div style="margin-top:10px;">
+                <div><strong>温度:</strong> ${tempDisplay}</div>
+                <div style="margin-top:8px;"><strong>风向:</strong> ${day.wind_dir || '?'}风 ${day.wind_power || '?'}级</div>
+              </div>
+            </div>`;
+        });
+      }
+      resultEl.innerHTML = html;
+      resultEl.style.display = 'block';
+      removeMapContainer();
+    }
+
+    // ========== 按钮事件 ==========
+    async function createPlan() {
+      const depCity = document.getElementById('dep-city').value.trim();
+      const city = document.getElementById('city').value.trim();
+      const days = parseInt(document.getElementById('days').value) || 3;
+      const interests = document.getElementById('interests').value.trim();
+      
+      if (!city) { alert('请输入目的地城市！'); document.getElementById('city').focus(); return; }
+      if (days < 1 || days > 7) { alert('天数必须 1-7 天！'); return; }
+
+      document.getElementById('result').innerHTML = '<div class="loading">🔄 生成计划中...</div>';
+      document.getElementById('result').style.display = 'block';
+      removeMapContainer();
+      
+      // 1. 获取旅行计划
+      const planResult = await callAPI('/create_travel_plan', { city, days, interests });
+      
+      // 2. 如果有出发城市，并行查询火车方案
+      let trainResult = null;
+      if (depCity && !planResult.error) {
+        const today = new Date().toISOString().split('T')[0];
+        trainResult = await callAPI('/get_city_train_plan', {
+          departure_city: depCity,
+          arrival_city: city,
+          date: planResult.itinerary?.[0]?.date || today,
+          strategy: 0
+        });
+      }
+      
+      // 3. 渲染结果（包含火车方案）
+      renderPlan(planResult, trainResult);
+    }
+
+    async function getWeatherOnly() {
+      const city = document.getElementById('city').value.trim();
+      const days = parseInt(document.getElementById('days').value) || 3;
+      if (!city) { alert('请输入城市！'); document.getElementById('city').focus(); return; }
+      document.getElementById('result').innerHTML = '<div class="loading">🔄 获取天气中...</div>';
+      document.getElementById('result').style.display = 'block';
+      removeMapContainer();
+      const result = await callAPI('/get_weather', { city, days });
+      renderWeather(result);
+    }
+
+    // 独立火车查询
+    function toggleTrainForm() {
+      const section = document.getElementById('train-form-section');
+      section.style.display = section.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function queryTrainPlan() {
+      const depCity = document.getElementById('train-dep').value.trim();
+      const arrCity = document.getElementById('train-arr').value.trim();
+      const date = document.getElementById('train-date').value;
+      const time = document.getElementById('train-time').value;
+      const strategy = parseInt(document.getElementById('train-strategy').value) || 0;
+
+      if (!depCity || !arrCity) { alert('请输入出发城市和到达城市！'); return; }
+      if (!date) { alert('请选择出行日期！'); return; }
+
+      document.getElementById('train-result').innerHTML = '<div class="loading">🔄 查询火车方案中...</div>';
+      const result = await callAPI('/get_city_train_plan', {
+        departure_city: depCity,
+        arrival_city: arrCity,
+        date: date,
+        time: time || undefined,
+        strategy: strategy
+      });
+      renderTrainPlan(result, 'train-result', false);
+    }
+
+    // ========== 页面初始化 ==========
+    document.addEventListener('DOMContentLoaded', () => {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('train-date').value = today;
+      
+      ['city', 'interests'].forEach(id => {
+        document.getElementById(id)?.addEventListener('keypress', e => {
+          if (e.key === 'Enter') createPlan();
+        });
+      });
+      ['train-dep', 'train-arr'].forEach(id => {
+        document.getElementById(id)?.addEventListener('keypress', e => {
+          if (e.key === 'Enter') queryTrainPlan();
+        });
+      });
+    });
+  </script>
+</body>
+</html>

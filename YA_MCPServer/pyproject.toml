@@ -1,0 +1,15 @@
+[project]
+name = "YA_MCPServer_DeepReport"
+version = "0.1.0"
+description = "该智能体采用DeepResearch模式，用于生成技术方案、实验报告、综述报告、分析报告和专利等各种类型的报告。"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "art>=6.5",
+    "black>=25.9.0",
+    "colorlog>=6.10.1",
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.14.0",
+    "pyyaml>=6.0.2",
+    "ruff>=0.14.4",
+]
